@@ -123,3 +123,70 @@ mod persistence_tests {
         std::fs::remove_file(path).unwrap();
     }
 }
+
+use sha2::{Digest, Sha256};
+
+/// Store a checksummed snapshot via a sibling temporary file and rename.
+/// The checksum detects accidental corruption, not malicious tampering.
+/// This function does not lock concurrent writers.
+pub fn save_checked(journal: &Journal, path: &Path) -> std::io::Result<()> {
+    use std::io::{Error, ErrorKind};
+    let temporary = path.with_extension("cybtmp");
+    if temporary == path {
+        return Err(Error::new(ErrorKind::InvalidInput, "invalid temporary path"));
+    }
+    save(journal, &temporary)?;
+    let contents = std::fs::read(&temporary)?;
+    let digest = Sha256::digest(&contents);
+    let mut file = OpenOptions::new().append(true).open(&temporary)?;
+    file.write_all(&digest)?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&temporary, path)
+}
+
+/// Read a checksummed snapshot, rejecting corruption before decoding entries.
+pub fn load_checked(path: &Path) -> std::io::Result<Journal> {
+    use std::io::{Error, ErrorKind};
+    let bytes = std::fs::read(path)?;
+    if bytes.len() < 32 {
+        return Err(Error::new(ErrorKind::InvalidData, "missing checksum"));
+    }
+    let (payload, checksum) = bytes.split_at(bytes.len() - 32);
+    if Sha256::digest(payload).as_slice() != checksum {
+        return Err(Error::new(ErrorKind::InvalidData, "checksum mismatch"));
+    }
+    let temporary = path.with_extension("cybread");
+    std::fs::write(&temporary, payload)?;
+    let result = load(&temporary);
+    let _ = std::fs::remove_file(&temporary);
+    result
+}
+
+#[cfg(test)]
+mod checked_tests {
+    use super::*;
+
+    #[test]
+    fn checked_roundtrip() {
+        let path = std::env::temp_dir().join(format!("cybmemory-{}-checked.bin", std::process::id()));
+        let mut journal = Journal::default();
+        journal.append("mission", "completed").unwrap();
+        save_checked(&journal, &path).unwrap();
+        assert_eq!(load_checked(&path).unwrap().entries(), journal.entries());
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn detects_tampering() {
+        let path = std::env::temp_dir().join(format!("cybmemory-{}-tamper.bin", std::process::id()));
+        let mut journal = Journal::default();
+        journal.append("mission", "completed").unwrap();
+        save_checked(&journal, &path).unwrap();
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes[10] ^= 1;
+        std::fs::write(&path, bytes).unwrap();
+        assert!(load_checked(&path).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
+}
