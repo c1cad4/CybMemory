@@ -173,6 +173,7 @@ pub fn save_checked_locked(journal: &Journal, path: &Path) -> std::io::Result<()
     let lock_path = path.with_extension("cyblock");
     let lock_file = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(lock_path)?;
@@ -188,6 +189,7 @@ pub fn load_checked_locked(path: &Path) -> std::io::Result<Journal> {
     let lock_path = path.with_extension("cyblock");
     let lock_file = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(lock_path)?;
