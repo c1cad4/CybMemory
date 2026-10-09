@@ -166,7 +166,6 @@ pub fn load_checked(path: &Path) -> std::io::Result<Journal> {
     result
 }
 
-
 /// Serialize writers that opt into this API using an advisory sibling lock.
 /// The lock is released when the handle goes out of scope.
 pub fn save_checked_locked(journal: &Journal, path: &Path) -> std::io::Result<()> {
@@ -215,14 +214,15 @@ mod checked_tests {
 
     #[test]
     fn locked_snapshot_roundtrip() {
-        let path = std::env::temp_dir().join(format!(
-            "cybmemory-{}-locked.bin",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("cybmemory-{}-locked.bin", std::process::id()));
         let mut journal = Journal::default();
         journal.append("mission", "completed").unwrap();
         save_checked_locked(&journal, &path).unwrap();
-        assert_eq!(load_checked_locked(&path).unwrap().entries(), journal.entries());
+        assert_eq!(
+            load_checked_locked(&path).unwrap().entries(),
+            journal.entries()
+        );
         std::fs::remove_file(&path).unwrap();
         std::fs::remove_file(path.with_extension("cyblock")).unwrap();
     }
