@@ -166,6 +166,38 @@ pub fn load_checked(path: &Path) -> std::io::Result<Journal> {
     result
 }
 
+
+/// Serialize writers that opt into this API using an advisory sibling lock.
+/// The lock is released when the handle goes out of scope.
+pub fn save_checked_locked(journal: &Journal, path: &Path) -> std::io::Result<()> {
+    use fs2::FileExt;
+    let lock_path = path.with_extension("cyblock");
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(lock_path)?;
+    lock_file.lock_exclusive()?;
+    let result = save_checked(journal, path);
+    FileExt::unlock(&lock_file)?;
+    result
+}
+
+/// Hold a shared advisory lock while validating and loading a snapshot.
+pub fn load_checked_locked(path: &Path) -> std::io::Result<Journal> {
+    use fs2::FileExt;
+    let lock_path = path.with_extension("cyblock");
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(lock_path)?;
+    lock_file.lock_shared()?;
+    let result = load_checked(path);
+    FileExt::unlock(&lock_file)?;
+    result
+}
+
 #[cfg(test)]
 mod checked_tests {
     use super::*;
@@ -179,6 +211,20 @@ mod checked_tests {
         save_checked(&journal, &path).unwrap();
         assert_eq!(load_checked(&path).unwrap().entries(), journal.entries());
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn locked_snapshot_roundtrip() {
+        let path = std::env::temp_dir().join(format!(
+            "cybmemory-{}-locked.bin",
+            std::process::id()
+        ));
+        let mut journal = Journal::default();
+        journal.append("mission", "completed").unwrap();
+        save_checked_locked(&journal, &path).unwrap();
+        assert_eq!(load_checked_locked(&path).unwrap().entries(), journal.entries());
+        std::fs::remove_file(&path).unwrap();
+        std::fs::remove_file(path.with_extension("cyblock")).unwrap();
     }
 
     #[test]
