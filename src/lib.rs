@@ -133,7 +133,10 @@ pub fn save_checked(journal: &Journal, path: &Path) -> std::io::Result<()> {
     use std::io::{Error, ErrorKind};
     let temporary = path.with_extension("cybtmp");
     if temporary == path {
-        return Err(Error::new(ErrorKind::InvalidInput, "invalid temporary path"));
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "invalid temporary path",
+        ));
     }
     save(journal, &temporary)?;
     let contents = std::fs::read(&temporary)?;
@@ -169,7 +172,8 @@ mod checked_tests {
 
     #[test]
     fn checked_roundtrip() {
-        let path = std::env::temp_dir().join(format!("cybmemory-{}-checked.bin", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("cybmemory-{}-checked.bin", std::process::id()));
         let mut journal = Journal::default();
         journal.append("mission", "completed").unwrap();
         save_checked(&journal, &path).unwrap();
@@ -179,7 +183,8 @@ mod checked_tests {
 
     #[test]
     fn detects_tampering() {
-        let path = std::env::temp_dir().join(format!("cybmemory-{}-tamper.bin", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("cybmemory-{}-tamper.bin", std::process::id()));
         let mut journal = Journal::default();
         journal.append("mission", "completed").unwrap();
         save_checked(&journal, &path).unwrap();
