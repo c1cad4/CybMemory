@@ -6,3 +6,4 @@ license = "MIT"
 
 [dependencies]
 sha2 = "0.10"
+fs2 = "0.4"
