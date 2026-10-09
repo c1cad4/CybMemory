@@ -61,8 +61,9 @@ pub fn save(journal: &Journal, path: &Path) -> std::io::Result<()> {
         file.write_all(&entry.sequence.to_le_bytes())?;
         for field in [&entry.kind, &entry.payload] {
             let bytes = field.as_bytes();
-            let len = u32::try_from(bytes.len())
-                .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "field too long"))?;
+            let len = u32::try_from(bytes.len()).map_err(|_| {
+                std::io::Error::new(std::io::ErrorKind::InvalidInput, "field too long")
+            })?;
             file.write_all(&len.to_le_bytes())?;
             file.write_all(bytes)?;
         }
@@ -93,12 +94,14 @@ pub fn load(path: &Path) -> std::io::Result<Journal> {
             }
             let mut bytes = vec![0; len];
             reader.read_exact(&mut bytes)?;
-            fields.push(String::from_utf8(bytes).map_err(|e| Error::new(ErrorKind::InvalidData, e))?);
+            fields
+                .push(String::from_utf8(bytes).map_err(|e| Error::new(ErrorKind::InvalidData, e))?);
         }
         if sequence != journal.entries().len() as u64 + 1 {
             return Err(Error::new(ErrorKind::InvalidData, "invalid sequence"));
         }
-        journal.append(&fields[0], &fields[1])
+        journal
+            .append(&fields[0], &fields[1])
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
     }
     Ok(journal)
@@ -109,7 +112,8 @@ mod persistence_tests {
     use super::*;
     #[test]
     fn roundtrip_journal() {
-        let path = std::env::temp_dir().join(format!("cybmemory-{}-roundtrip.bin", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("cybmemory-{}-roundtrip.bin", std::process::id()));
         let mut journal = Journal::default();
         journal.append("task", "started").unwrap();
         journal.append("review", "accepted").unwrap();
